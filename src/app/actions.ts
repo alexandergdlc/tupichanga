@@ -41,6 +41,55 @@ async function saveFile(file: File): Promise<string | null> {
     }
 }
 
+// ... (imports)
+
+export async function updateUserProfile(prevState: any, formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.email) return { success: false, message: 'No sesión' };
+
+    const name = formData.get('name') as string;
+    const phoneNumber = formData.get('phoneNumber') as string;
+
+    try {
+        await prisma.user.update({
+            where: { email: session.user.email },
+            data: { name, phoneNumber }
+        });
+        revalidatePath('/profile');
+        return { success: true, message: 'Perfil actualizado' };
+    } catch (e) {
+        return { success: false, message: 'Error al actualizar' };
+    }
+}
+
+export async function getUpcomingBookings(email: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return [];
+
+    const now = new Date();
+    // Fetch bookings for the next 12 hours (notification window)
+    const notificationWindow = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+
+    const bookings = await prisma.booking.findMany({
+        where: {
+            userId: user.id,
+            status: { in: ['PENDING', 'CONFIRMED'] },
+            startTime: {
+                gte: now,
+                lte: notificationWindow
+            }
+        },
+        include: {
+            court: {
+                include: { venue: true }
+            }
+        },
+        orderBy: { startTime: 'asc' }
+    });
+
+    return bookings;
+}
+
 export async function createBooking(courtId: number, startTime: string, price: number) {
     const session = await auth();
 
@@ -59,9 +108,59 @@ export async function createBooking(courtId: number, startTime: string, price: n
 
     const userId = user.id;
 
+    if (user.role === 'OWNER') {
+        return { success: false, error: 'Los dueños no pueden realizar reservas, solo ver la disponibilidad.' };
+    }
+
     // Calculate end time (assuming 1 hour slots for now)
     const start = new Date(startTime);
     const end = new Date(start.getTime() + 60 * 60 * 1000); // +1 hour
+
+    // Dynamic Price Calculation
+    // 1. Get Day of Week (0-6)
+    const dayOfWeek = start.getDay();
+
+    // 2. Find matching Schedule
+    const timeString = start.toTimeString().slice(0, 5); // "HH:MM"
+
+    const schedule = await prisma.schedule.findFirst({
+        where: {
+            courtId: courtId,
+            dayOfWeek: dayOfWeek,
+            startTime: { lte: timeString },
+            endTime: { gt: timeString }
+        }
+    });
+
+    // 3. Fallback to court default price if no specific schedule
+    let finalPrice = price; // Default from client (should be validated, but we use DB source of truth)
+
+    if (schedule) {
+        finalPrice = schedule.price;
+    } else {
+        // Fetch court default price to be safe
+        const court = await prisma.court.findUnique({ where: { id: courtId } });
+        if (court) finalPrice = court.pricePerHour;
+    }
+
+    // Prevent booking in the past
+    const now = new Date();
+    if (start < now) {
+        return { success: false, error: 'No se pueden reservar fechas pasadas.' };
+    }
+
+    // 4. Overlap Check (Server-side constraint)
+    const existingBooking = await prisma.booking.findFirst({
+        where: {
+            courtId,
+            startTime: start, // Assuming exact slot match logic for now. For ranges, use gte/lt.
+            status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] }
+        }
+    });
+
+    if (existingBooking) {
+        return { success: false, error: 'Este horario ya no está disponible.' };
+    }
 
     try {
         const booking = await prisma.booking.create({
@@ -70,8 +169,8 @@ export async function createBooking(courtId: number, startTime: string, price: n
                 courtId,
                 startTime: start,
                 endTime: end,
-                totalPrice: price,
-                status: 'CONFIRMED', // Auto-confirm for demo
+                totalPrice: finalPrice,
+                status: 'PENDING', // Default to PENDING as requested (Waiting)
             },
         });
 
@@ -93,6 +192,7 @@ export async function authenticate(
     prevState: string | undefined,
     formData: FormData,
 ) {
+    // ... existing authentication logic ...
     try {
         const email = formData.get('email') as string;
         let redirectTo = '/';
@@ -429,41 +529,149 @@ const ScheduleSchema = z.object({
     price: z.coerce.number().min(0),
 });
 
-export async function upsertSchedule(prevState: any, formData: FormData) {
+export async function saveDaySchedules(prevState: any, formData: FormData) {
     const session = await auth();
     if (!session?.user?.email) return { success: false, message: 'No autorizado' };
 
-    const validatedFields = ScheduleSchema.safeParse({
-        courtId: formData.get('courtId'),
-        dayOfWeek: formData.get('dayOfWeek'),
-        startTime: formData.get('startTime'),
-        endTime: formData.get('endTime'),
-        price: formData.get('price'),
-    });
+    const courtId = Number(formData.get('courtId'));
+    const dayOfWeek = Number(formData.get('dayOfWeek'));
+    const schedulesJson = formData.get('schedules') as string;
 
-    if (!validatedFields.success) {
-        return { success: false, message: 'Datos de horario inválidos' };
+    if (!courtId || isNaN(dayOfWeek) || !schedulesJson) {
+        return { success: false, message: 'Datos inválidos' };
     }
-
-    const { courtId, dayOfWeek, startTime, endTime, price } = validatedFields.data;
 
     try {
-        // Remove existing schedule for this day to avoid duplicates/overlaps for now (simplification)
-        await prisma.schedule.deleteMany({
-            where: { courtId, dayOfWeek }
+        const schedules = JSON.parse(schedulesJson);
+
+        // Transaction: Delete old schedules for this day, insert new ones
+        await prisma.$transaction(async (tx) => {
+            // Delete existing
+            await tx.schedule.deleteMany({
+                where: { courtId, dayOfWeek }
+            });
+
+            // Insert new
+            if (schedules.length > 0) {
+                await tx.schedule.createMany({
+                    data: schedules.map((s: any) => ({
+                        courtId,
+                        dayOfWeek,
+                        startTime: s.startTime,
+                        endTime: s.endTime,
+                        price: parseFloat(s.price)
+                    }))
+                });
+            }
         });
 
-        await prisma.schedule.create({
-            data: { courtId, dayOfWeek, startTime, endTime, price }
-        });
-
-        revalidatePath(`/admin/venues`); // General revalidation
-        return { success: true, message: 'Horario guardado' };
+        revalidatePath(`/admin/venues`);
+        return { success: true, message: 'Horarios guardados correctamente' };
     } catch (error) {
-        console.error(error);
-        return { success: false, message: 'Error al guardar horario' };
+        console.error('Error saving schedules:', error);
+        return { success: false, message: 'Error al guardar horarios' };
     }
 }
+
+
+export async function expireBookings() {
+    try {
+        await prisma.booking.updateMany({
+            where: {
+                status: { in: ['PENDING', 'CONFIRMED'] },
+                endTime: { lt: new Date() }
+            },
+            data: { status: 'COMPLETED' }
+        });
+    } catch (e) {
+        console.error("Error auto-completing bookings:", e);
+    }
+}
+
+export async function getDocAvailability(courtId: number, date: string) {
+    // 0. Auto-complete past bookings
+    await expireBookings();
+
+    // 1. Get schedules for the day of the week
+    const targetDate = new Date(date);
+    // Fix: new Date(date) processes as UTC (usually) or local depending on string format? 
+    // "YYYY-MM-DD" usually parses as UTC midnight.
+    // getDay() returns 0-6 based on local time or UTC? 
+    // It's safer to rely on the input string yyyy-mm-dd and ensure we treat it consistently.
+    // Let's assume standard "2024-05-10" input.
+    // We want the day of week for this date.
+    // We'll append T12:00:00 to ensure we are in the middle of the day to avoid timezone shifts changing the day.
+    const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
+
+    const schedules = await prisma.schedule.findMany({
+        where: { courtId, dayOfWeek },
+        orderBy: { startTime: 'asc' }
+    });
+
+    // 2. Get existing bookings for the date
+    const startOfDay = new Date(`${date}T00:00:00`);
+    const endOfDay = new Date(`${date}T23:59:59`);
+
+    const bookings = await prisma.booking.findMany({
+        where: {
+            courtId,
+            startTime: {
+                gte: startOfDay,
+                lte: endOfDay
+            },
+            // Booking Logic: PENDING, CONFIRMED, COMPLETED block the slot. REJECTED/CANCELLED do not.
+            status: { in: ['PENDING', 'CONFIRMED', 'COMPLETED'] }
+        }
+    });
+
+    // 3. Generate hourly slots based on schedules
+    const slots: any[] = [];
+
+    // Helper to parse time string "HH:MM" to minutes
+    const toMinutes = (time: string) => {
+        const [h, m] = time.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    // Helper to format minutes to "HH:MM"
+    const toTimeStr = (mins: number) => {
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    schedules.forEach(schedule => {
+        let currentMins = toMinutes(schedule.startTime);
+        const endMins = toMinutes(schedule.endTime);
+
+        while (currentMins < endMins) {
+            const slotStartStr = toTimeStr(currentMins);
+            const slotEndMins = currentMins + 60; // 1 hour slots hardcoded for now
+
+            // Don't go past the schedule end
+            if (slotEndMins > endMins) break;
+
+            // Check if booked
+            // We compare hours. Bookings are saved as Date objects.
+            // We strip time from booking.startTime and compare.
+            const isBooked = bookings.some(b => {
+                const bTime = b.startTime.toTimeString().slice(0, 5); // HH:MM
+                return bTime === slotStartStr;
+            });
+
+            slots.push({
+                time: slotStartStr,
+                price: schedule.price,
+                isBooked: isBooked
+            });
+
+            currentMins += 60;
+        }
+    });
+
+    return slots;
+}
+
 
 export async function deleteSchedule(scheduleId: number) {
     try {
@@ -518,6 +726,7 @@ export async function getVenueStats(venueId: number) {
 
         court.bookings.forEach(booking => {
             // ONLY count valid bookings
+            // Consistent stat logic: Confirmed/Completed are revenue
             if (booking.status !== 'CONFIRMED' && booking.status !== 'COMPLETED') return;
 
             const date = new Date(booking.startTime);
@@ -658,6 +867,11 @@ export async function rescheduleBooking(bookingId: number, newStartTime: string)
         if (venue?.ownerId !== user.id) {
             return { success: false, message: 'No tienes permiso para modificar esta reserva' };
         }
+    }
+
+    // Verify status allows rescheduling
+    if (booking.status === 'REJECTED' || booking.status === 'COMPLETED') {
+        return { success: false, message: 'No se puede reprogramar una reserva rechazada o completada.' };
     }
 
     const start = new Date(newStartTime);

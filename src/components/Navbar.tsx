@@ -1,9 +1,12 @@
 import Link from 'next/link';
 
 import { auth, signOut } from '@/auth';
+import { getUpcomingBookings } from '@/app/actions';
+import NotificationsBell from './NotificationsBell';
 
 export default async function Navbar() {
     const session = await auth();
+    const upcomingBookings = session?.user?.email ? await getUpcomingBookings(session.user.email) : [];
 
     return (
         <nav className="sticky top-0 z-50 w-full border-b border-zinc-200 bg-white/80 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80">
@@ -21,6 +24,8 @@ export default async function Navbar() {
                 <div className="flex items-center gap-4">
                     {session?.user ? (
                         <div className="flex items-center gap-4">
+                            <NotificationsBell bookings={upcomingBookings} />
+
                             <Link href="/profile" className="flex items-center gap-3 transition hover:opacity-80">
                                 <div className="relative h-8 w-8 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                                     {session.user.image ? (

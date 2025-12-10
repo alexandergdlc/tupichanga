@@ -1,13 +1,14 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { updateProfile } from '@/app/actions';
+import { updateUserProfile } from '@/app/actions';
 import Image from 'next/image';
 
 type User = {
     name: string | null;
     email: string;
     image: string | null;
+    phoneNumber: string | null;
 };
 
 const initialState = {
@@ -16,7 +17,7 @@ const initialState = {
 };
 
 export default function ProfileForm({ user }: { user: User }) {
-    const [state, dispatch, isPending] = useActionState(updateProfile, initialState);
+    const [state, dispatch, isPending] = useActionState(updateUserProfile, initialState);
     const [preview, setPreview] = useState<string | null>(user.image || null);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -28,7 +29,7 @@ export default function ProfileForm({ user }: { user: User }) {
 
     return (
         <form action={dispatch} className="space-y-8 max-w-2xl mx-auto">
-            {/* Profile Photo */}
+            {/* ... image upload ... */}
             <div className="flex flex-col items-center gap-4 sm:flex-row">
                 <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-zinc-800">
                     {preview ? (
@@ -40,6 +41,7 @@ export default function ProfileForm({ user }: { user: User }) {
                     )}
                 </div>
                 <div>
+                    {/* ... file input ... */}
                     <label htmlFor="image" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                         Foto de Perfil
                     </label>
@@ -65,6 +67,17 @@ export default function ProfileForm({ user }: { user: User }) {
                             name="name"
                             id="name"
                             defaultValue={user.name || ''}
+                            className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="phoneNumber" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Celular (WhatsApp)</label>
+                        <input
+                            type="text"
+                            name="phoneNumber"
+                            id="phoneNumber"
+                            defaultValue={user.phoneNumber || '+51 '}
+                            placeholder="+51 999999999"
                             className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                         />
                     </div>

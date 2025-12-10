@@ -3,12 +3,14 @@ import { PrismaClient } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import MyBookingsClient from '@/components/MyBookingsClient';
+import { expireBookings } from '@/app/actions';
 
 const prisma = new PrismaClient();
 
 export const dynamic = 'force-dynamic';
 
 async function getUserBookings(email: string) {
+    await expireBookings(); // Ensure statuses are up to date
     const user = await prisma.user.findUnique({
         where: { email },
         include: {
@@ -20,7 +22,7 @@ async function getUserBookings(email: string) {
                         }
                     }
                 },
-                orderBy: { startTime: 'desc' }
+                orderBy: { createdAt: 'desc' }
             }
         }
     });

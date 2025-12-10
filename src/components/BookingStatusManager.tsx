@@ -8,59 +8,96 @@ interface BookingStatusManagerProps {
     currentStatus: string;
 }
 
-const statusOptions = [
-    { value: 'PENDING', label: 'En Espera', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-500' },
-    { value: 'CONFIRMED', label: 'Confirmado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' },
-    { value: 'REJECTED', label: 'Rechazado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
-    { value: 'COMPLETED', label: 'Completado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
-];
+const statusOptions: Record<string, { label: string; color: string; border: string; text: string }> = {
+    'PENDING': { label: 'En Espera', color: 'bg-yellow-100', border: 'border-yellow-200', text: 'text-yellow-800' },
+    'CONFIRMED': { label: 'Confirmado', color: 'bg-green-100', border: 'border-green-200', text: 'text-green-800' },
+    'REJECTED': { label: 'Rechazado', color: 'bg-red-100', border: 'border-red-200', text: 'text-red-800' },
+    'COMPLETED': { label: 'Completado', color: 'bg-blue-100', border: 'border-blue-200', text: 'text-blue-800' },
+};
 
 export default function BookingStatusManager({ bookingId, currentStatus }: BookingStatusManagerProps) {
     const [status, setStatus] = useState(currentStatus);
+    const [isOpen, setIsOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
 
-    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newStatus = e.target.value;
-        const previousStatus = status;
+    const handleSelect = (newStatus: string) => {
+        if (newStatus === status) {
+            setIsOpen(false);
+            return;
+        }
 
-        setStatus(newStatus); // Optimistic update
+        const previousStatus = status;
+        setStatus(newStatus);
+        setIsOpen(false);
 
         startTransition(async () => {
             const result = await updateBookingStatus(bookingId, newStatus);
             if (!result.success) {
-                // Revert on failure
                 setStatus(previousStatus);
-                alert(result.message || 'Error al actualizar estado');
+                // Could toast here
+                console.error(result.message);
             }
         });
     };
 
-    const currentOption = statusOptions.find(opt => opt.value === status) || statusOptions[0];
+    const currentOption = statusOptions[status] || statusOptions['PENDING'];
 
     return (
-        <div className="relative">
-            <select
-                value={status}
-                onChange={handleChange}
+        <div className="relative inline-block text-left">
+            {/* Backdrop for click outside */}
+            {isOpen && (
+                <div className="fixed inset-0 z-10 cursor-default" onClick={() => setIsOpen(false)}></div>
+            )}
+
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
                 disabled={isPending}
                 className={`
-                    appearance-none rounded-full px-3 py-1 pr-8 text-xs font-semibold leading-5 outline-none ring-1 ring-inset ring-transparent focus:ring-green-500 transition-colors cursor-pointer
-                    ${currentOption.color}
-                    ${isPending ? 'opacity-70 cursor-wait' : ''}
+                    group inline-flex items-center justify-between gap-x-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-all duration-200
+                    ${currentOption.color} ${currentOption.border} ${currentOption.text}
+                    ${isPending ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-95 active:scale-95'}
                 `}
             >
-                {statusOptions.map((option) => (
-                    <option key={option.value} value={option.value} className="bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-200">
-                        {option.label}
-                    </option>
-                ))}
-            </select>
-            {/* Custom Arrow Icon for styling */}
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
-                <svg className={`h-3 w-3 ${currentOption.color.split(' ')[1]}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                {currentOption.label}
+                <svg
+                    className={`h-3 w-3 flex-shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth="2.5"
+                    stroke="currentColor"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
-            </div>
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 z-20 mt-2 w-40 origin-top-right overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900 animate-in fade-in zoom-in-95 duration-100">
+                    {Object.entries(statusOptions).map(([value, option]) => (
+                        <button
+                            key={value}
+                            onClick={() => handleSelect(value)}
+                            className={`
+                                flex w-full items-center justify-between px-4 py-2.5 text-left text-xs font-medium transition-colors
+                                ${status === value
+                                    ? 'bg-zinc-50 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+                                    : 'text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                                }
+                            `}
+                        >
+                            <span className={`inline-block h-2 w-2 rounded-full ${option.color.replace('bg-', 'bg-').replace('100', '400')} mr-2`}></span>
+                            {option.label}
+                            {status === value && (
+                                <span className="ml-auto text-green-600">
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

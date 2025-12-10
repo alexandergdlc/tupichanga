@@ -2,73 +2,73 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { createBooking, getBookings } from '@/app/actions';
+import { createBooking, getDocAvailability } from '@/app/actions';
 
 
 interface BookingCalendarProps {
     courtId: number;
-    pricePerHour: number;
+    pricePerHour: number; // Used only as fallback or reference now
     yapeQrUrl?: string | null;
+    userRole?: string;
 }
 
-export default function BookingCalendar({ courtId, pricePerHour, yapeQrUrl }: BookingCalendarProps) {
+export default function BookingCalendar({ courtId, pricePerHour, yapeQrUrl, userRole }: BookingCalendarProps) {
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-    const [selectedTime, setSelectedTime] = useState<string | null>(null);
-    const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+    const [selectedSlot, setSelectedSlot] = useState<{ time: string, price: number } | null>(null);
+    const [availableSlots, setAvailableSlots] = useState<{ time: string, price: number, isBooked: boolean }[]>([]);
+
     const [isLoading, setIsLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [showYapeModal, setShowYapeModal] = useState(false);
 
-    // Generate some dummy slots for the day (16:00 to 23:00)
-    const timeSlots = [
-        '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00', '23:00'
-    ];
-
     useEffect(() => {
         const fetchBookings = async () => {
-            setBookedSlots([]);
+            // ... existing fetch logic is fine ...
+            setAvailableSlots([]);
             setMessage(null);
+            setSelectedSlot(null);
+
             if (selectedDate) {
-                const slots = await getBookings(courtId, selectedDate);
-                setBookedSlots(slots);
+                const slots = await getDocAvailability(courtId, selectedDate);
+                setAvailableSlots(slots);
             }
         };
         fetchBookings();
     }, [courtId, selectedDate]);
 
-    const handleSlotClick = (time: string) => {
-        const isBooked = bookedSlots.includes(time);
+    const handleSlotClick = (slot: { time: string, price: number, isBooked: boolean }) => {
+        if (slot.isBooked) return;
 
-        if (isBooked) {
-            setMessage({ type: 'error', text: `La hora ${time} ya ha sido reservada.` });
-            setSelectedTime(null);
-        } else {
-            setMessage(null); // Clear previous errors
-            setSelectedTime(time);
+        if (userRole === 'OWNER') {
+            // Optional: visual feedback
+            return;
         }
+
+        setMessage(null);
+        setSelectedSlot(slot);
     };
 
     const handleBooking = async () => {
-        if (!selectedTime) return;
+        if (!selectedSlot) return;
 
         setIsLoading(true);
         setMessage(null);
 
         // Construct full ISO datetime string
-        const dateTime = new Date(`${selectedDate}T${selectedTime}:00`);
+        const dateTime = new Date(`${selectedDate}T${selectedSlot.time}:00`);
 
-        const result = await createBooking(courtId, dateTime.toISOString(), pricePerHour);
+        // We pass the price just for sanity check or analytics, but server strictly recalculates it
+        const result = await createBooking(courtId, dateTime.toISOString(), selectedSlot.price);
 
         if (result.success) {
-            // Show Yape Modal instead of just success message
             setShowYapeModal(true);
             setMessage({ type: 'success', text: '¡Reserva preliminar creada! Procede al pago.' });
 
-            // Refresh bookings to mark this one as taken immediately
-            const newSlots = await getBookings(courtId, selectedDate);
-            setBookedSlots(newSlots);
+            // Refresh to update UI
+            const slots = await getDocAvailability(courtId, selectedDate);
+            setAvailableSlots(slots);
         } else {
-            setMessage({ type: 'error', text: 'Hubo un error al reservar. Inténtalo de nuevo.' });
+            setMessage({ type: 'error', text: result.error || 'Hubo un error al reservar.' });
         }
 
         setIsLoading(false);
@@ -87,47 +87,73 @@ export default function BookingCalendar({ courtId, pricePerHour, yapeQrUrl }: Bo
                         onChange={(e) => setSelectedDate(e.target.value)}
                         className="w-full cursor-pointer appearance-none rounded-xl bg-zinc-100 px-4 py-3 text-lg font-semibold text-zinc-900 transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-zinc-800 dark:text-zinc-100"
                     />
-                    {/* Tip: on some browsers text-align center might look better, but let's keep left for now */}
                 </div>
             </div>
 
             <p className="mb-3 text-sm font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 Horarios Disponibles
             </p>
-            <div className="grid grid-cols-4 gap-3 mb-6">
-                {timeSlots.map((time) => {
-                    const isBooked = bookedSlots.includes(time);
-                    const isSelected = selectedTime === time;
 
-                    let buttonClass = 'bg-white border border-zinc-200 text-zinc-600 shadow-sm hover:border-green-500 hover:text-green-600 hover:shadow-md dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400';
+            {userRole === 'OWNER' && (
+                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                    <p className="flex items-center gap-2 text-sm font-semibold">
+                        <span>👀</span>
+                        Modo Vista: Como dueño, solo puedes ver la disponibilidad.
+                    </p>
+                </div>
+            )}
 
-                    if (isBooked) {
-                        // Occupied: Subtle gray, no interaction
-                        buttonClass = 'bg-zinc-50 text-zinc-300 cursor-not-allowed border-transparent shadow-none dark:bg-zinc-800/50 dark:text-zinc-600';
-                    } else if (isSelected) {
-                        // Selected: Brand Primary (Green), Elevated
-                        buttonClass = 'bg-green-600 border-green-600 text-white shadow-lg scale-105 ring-2 ring-green-600 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900';
-                    }
+            {availableSlots.length === 0 ? (
+                <div className="text-center py-6 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700">
+                    <p className="text-zinc-500">No hay horarios disponibles para este día.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-6">
+                    {availableSlots.map((slot) => {
+                        const isSelected = selectedSlot?.time === slot.time;
 
-                    return (
-                        <button
-                            key={time}
-                            onClick={() => !isBooked && handleSlotClick(time)}
-                            disabled={isBooked}
-                            className={`rounded-xl py-3 text-sm font-bold transition-all duration-200 ${buttonClass}`}
-                        >
-                            {time}
-                        </button>
-                    );
-                })}
-            </div>
+                        // Check if slot is in the past
+                        const now = new Date();
+                        // selectedDate is YYYY-MM-DD. We assume local browser time for "now".
+                        // We construct a date for the slot.
+                        const slotDate = new Date(`${selectedDate}T${slot.time}`);
+                        const isPast = slotDate < now;
 
-            {selectedTime && !bookedSlots.includes(selectedTime) && (
+                        let buttonClass = 'bg-white border border-zinc-200 text-zinc-600 shadow-sm hover:border-green-500 hover:text-green-600 hover:shadow-md dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400';
+
+                        if (slot.isBooked || isPast) {
+                            // Occupied or Past
+                            buttonClass = 'bg-zinc-50 text-zinc-300 cursor-not-allowed border-transparent shadow-none dark:bg-zinc-800/50 dark:text-zinc-600';
+                        } else if (isSelected) {
+                            // Selected
+                            buttonClass = 'bg-green-600 border-green-600 text-white shadow-lg scale-105 ring-2 ring-green-600 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900';
+                        }
+
+                        return (
+                            <button
+                                key={slot.time}
+                                onClick={() => handleSlotClick(slot)}
+                                disabled={slot.isBooked || isPast}
+                                className={`flex flex-col items-center justify-center rounded-xl py-3 text-sm font-bold transition-all duration-200 ${buttonClass}`}
+                            >
+                                <span>{slot.time}</span>
+                                {!slot.isBooked && !isPast && (
+                                    <span className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-green-100' : 'text-zinc-400'}`}>
+                                        S/ {slot.price}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {selectedSlot && (
                 <div className="rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
                     <p className="text-sm mb-2">Resumen:</p>
                     <div className="flex justify-between font-bold text-lg mb-4">
-                        <span>{selectedDate} - {selectedTime}</span>
-                        <span>S/ {pricePerHour}</span>
+                        <span>{selectedDate} - {selectedSlot.time}</span>
+                        <span>S/ {selectedSlot.price}</span>
                     </div>
                     <button
                         onClick={handleBooking}
@@ -166,7 +192,7 @@ export default function BookingCalendar({ courtId, pricePerHour, yapeQrUrl }: Bo
 
                         <div className="space-y-3">
                             <a
-                                href={`https://wa.me/51902293694?text=Hola, acabo de reservar para el ${selectedDate} a las ${selectedTime}. Adjunto mi comprobante de pago.`}
+                                href={`https://wa.me/51902293694?text=Hola, acabo de reservar para el ${selectedDate} a las ${selectedSlot?.time}. Adjunto mi comprobante de pago.`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="block w-full rounded-lg bg-emerald-500 px-4 py-3 text-center font-bold text-white hover:bg-emerald-600"
@@ -176,7 +202,7 @@ export default function BookingCalendar({ courtId, pricePerHour, yapeQrUrl }: Bo
                             <button
                                 onClick={() => {
                                     setShowYapeModal(false);
-                                    setSelectedTime(null);
+                                    setSelectedSlot(null);
                                 }}
                                 className="block w-full rounded-lg bg-zinc-200 px-4 py-3 text-center font-medium text-zinc-800 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-200"
                             >

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import Image from 'next/image';
 import Link from 'next/link';
 import BookingCalendar from '@/components/BookingCalendar';
+import { auth } from '@/auth';
 
 const prisma = new PrismaClient();
 
@@ -15,6 +16,7 @@ async function getVenue(id: string) {
         where: { id: venueId },
         include: {
             courts: true,
+            owner: true,
         },
     });
     return venue;
@@ -23,6 +25,7 @@ async function getVenue(id: string) {
 export default async function VenuePage({ params }: { params: Promise<{ id: string }> }) {
     // Await params in case it becomes async in future Next.js versions or is used in a way that requires it
     const { id } = await params;
+    const session = await auth();
     const venue = await getVenue(id);
 
     if (!venue) {
@@ -85,11 +88,11 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
                     {/* Botón de Contacto Optimizado */}
                     <div className="mt-auto">
                         <Link
-                            href="https://wa.me/51902293694"
+                            href={`https://wa.me/${venue.owner.phoneNumber?.replace(/\D/g, '') || '51902293694'}`}
                             target="_blank"
                             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] px-6 py-3 font-bold text-white shadow-md transition-transform hover:scale-[1.02] hover:bg-[#128C7E] md:w-auto"
                         >
-                            <span>💬 Contactar Dueño (WhatsApp)</span>
+                            <span>💬 Contactar con el Encargado (WhatsApp)</span>
                         </Link>
                         <p className="mt-2 text-xs text-zinc-400 text-center md:text-left">
                             Consulta disponibilidad extra o dudas directamente.
@@ -124,6 +127,7 @@ export default async function VenuePage({ params }: { params: Promise<{ id: stri
                                 courtId={court.id}
                                 pricePerHour={court.pricePerHour}
                                 yapeQrUrl={venue.yapeQrUrl}
+                                userRole={session?.user?.role}
                             />
                         </div>
 
