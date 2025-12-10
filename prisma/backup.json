@@ -1,0 +1,227 @@
+{
+  "users": [
+    {
+      "id": 5,
+      "email": "jhor.marinio@tupichanga.pe",
+      "name": "Jhor Marinio",
+      "image": "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80",
+      "password": "$2b$10$uWNVi.lVntItBC3K0xXt4./eRjlomWpFFUy7bFUXljkoBmuXjHED2",
+      "role": "OWNER",
+      "createdAt": "2025-12-09T23:55:33.455Z",
+      "updatedAt": "2025-12-10T00:10:22.667Z"
+    },
+    {
+      "id": 6,
+      "email": "diego.flores@tupichanga.pe",
+      "name": "Diego Flores",
+      "image": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80",
+      "password": "$2b$10$joQLQUAADjvRPRONsKiNFe7q/Zc1l5anOpdruS8oFP15c2Dl1M4Q2",
+      "role": "OWNER",
+      "createdAt": "2025-12-09T23:55:33.473Z",
+      "updatedAt": "2025-12-10T00:08:05.585Z"
+    },
+    {
+      "id": 7,
+      "email": "cliente@gmail.com",
+      "name": "Carlos Cliente",
+      "image": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80",
+      "password": "$2b$10$ldq3X0PZV19mq1ePPlHzxuuSScrT4BsZsUyZbpwNtLH4GPvf3fwSm",
+      "role": "CLIENT",
+      "createdAt": "2025-12-09T23:55:33.479Z",
+      "updatedAt": "2025-12-09T23:55:33.479Z"
+    },
+    {
+      "id": 8,
+      "email": "gomezalextremo@gmail.com",
+      "name": "Alexander Gomez",
+      "image": null,
+      "password": "$2b$10$CU1avEpPukoQn.4yqo8q.uHjLNJbU9kGlOYCsVAs3OnfzFJmTQBZK",
+      "role": "CLIENT",
+      "createdAt": "2025-12-10T00:05:14.321Z",
+      "updatedAt": "2025-12-10T00:05:14.321Z"
+    }
+  ],
+  "venues": [
+    {
+      "id": 4,
+      "name": "Complejo Deportivo Maracaná Ayacucho",
+      "description": "El mejor grass sintético de Huamanga. Abierto las 24 horas.",
+      "address": "Av. Mariscal Cáceres 450",
+      "city": "Ayacucho",
+      "district": null,
+      "imageUrl": "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?q=80&w=2070",
+      "yapeQrUrl": null,
+      "googleMapsUrl": null,
+      "ownerId": 5,
+      "createdAt": "2025-12-09T23:55:33.485Z",
+      "updatedAt": "2025-12-09T23:55:33.485Z",
+      "courts": [
+        {
+          "id": 8,
+          "name": "Cancha 1 - Fútbol 7",
+          "sport": "Futbol",
+          "type": "Sintética",
+          "pricePerHour": 80,
+          "venueId": 4,
+          "createdAt": "2025-12-09T23:55:33.485Z",
+          "updatedAt": "2025-12-09T23:55:33.485Z"
+        },
+        {
+          "id": 9,
+          "name": "Cancha Vóley 1",
+          "sport": "Voley",
+          "type": "Losa",
+          "pricePerHour": 40,
+          "venueId": 4,
+          "createdAt": "2025-12-09T23:55:33.485Z",
+          "updatedAt": "2025-12-10T00:42:54.887Z"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "El Coloso de Huamanga",
+      "description": "Amplias instalaciones con estacionamiento y zona de parrillas.",
+      "address": "Jr. 28 de Julio 123",
+      "city": "Ayacucho",
+      "district": null,
+      "imageUrl": "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?q=80&w=2071",
+      "yapeQrUrl": null,
+      "googleMapsUrl": null,
+      "ownerId": 5,
+      "createdAt": "2025-12-09T23:55:33.513Z",
+      "updatedAt": "2025-12-09T23:55:33.513Z",
+      "courts": [
+        {
+          "id": 10,
+          "name": "Estadio Principal",
+          "sport": "Futbol",
+          "type": "Grass Natural",
+          "pricePerHour": 120,
+          "venueId": 5,
+          "createdAt": "2025-12-09T23:55:33.513Z",
+          "updatedAt": "2025-12-09T23:55:33.513Z"
+        },
+        {
+          "id": 11,
+          "name": "Cancha Voley A",
+          "sport": "Voley",
+          "type": "Sintética",
+          "pricePerHour": 50,
+          "venueId": 5,
+          "createdAt": "2025-12-09T23:55:33.513Z",
+          "updatedAt": "2025-12-09T23:55:33.513Z"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Club Campestre Yanamilla",
+      "description": "Disfruta del deporte al aire libre con la mejor vista de Ayacucho.",
+      "address": "Vía de Evitamiento Km 5",
+      "city": "Ayacucho",
+      "district": "",
+      "imageUrl": "/uploads/1765328698277-20048119-grasscharacato.jpg",
+      "yapeQrUrl": null,
+      "googleMapsUrl": "",
+      "ownerId": 5,
+      "createdAt": "2025-12-09T23:55:33.526Z",
+      "updatedAt": "2025-12-10T01:04:58.285Z",
+      "courts": [
+        {
+          "id": 12,
+          "name": "Cancha Pro 1",
+          "sport": "Futbol",
+          "type": "FIFA Quality",
+          "pricePerHour": 100,
+          "venueId": 6,
+          "createdAt": "2025-12-09T23:55:33.526Z",
+          "updatedAt": "2025-12-09T23:55:33.526Z"
+        },
+        {
+          "id": 13,
+          "name": "Campo Multiusos",
+          "sport": "Voley",
+          "type": "Concreto",
+          "pricePerHour": 45,
+          "venueId": 6,
+          "createdAt": "2025-12-09T23:55:33.526Z",
+          "updatedAt": "2025-12-09T23:55:33.526Z"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Estadio Leoncio Prado",
+      "description": "La tradición del deporte en Ayacucho. Canchas renovadas.",
+      "address": "Parque Leoncio Prado S/N",
+      "city": "Ayacucho",
+      "district": null,
+      "imageUrl": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=2070",
+      "yapeQrUrl": null,
+      "googleMapsUrl": null,
+      "ownerId": 6,
+      "createdAt": "2025-12-09T23:55:33.535Z",
+      "updatedAt": "2025-12-09T23:55:33.535Z",
+      "courts": [
+        {
+          "id": 14,
+          "name": "Campo A - Futbol",
+          "sport": "Futbol",
+          "type": "Sintética",
+          "pricePerHour": 90,
+          "venueId": 7,
+          "createdAt": "2025-12-09T23:55:33.535Z",
+          "updatedAt": "2025-12-09T23:55:33.535Z"
+        },
+        {
+          "id": 15,
+          "name": "Net Alta - Voley",
+          "sport": "Voley",
+          "type": "Losa",
+          "pricePerHour": 40,
+          "venueId": 7,
+          "createdAt": "2025-12-09T23:55:33.535Z",
+          "updatedAt": "2025-12-09T23:55:33.535Z"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Polideportivo Nery García",
+      "description": "Complejo moderno cerca al mercado Nery García.",
+      "address": "Jr. Los Andes 567",
+      "city": "Ayacucho",
+      "district": null,
+      "imageUrl": "https://images.unsplash.com/photo-1518605348400-43ded9d2948b?q=80&w=2070",
+      "yapeQrUrl": null,
+      "googleMapsUrl": null,
+      "ownerId": 6,
+      "createdAt": "2025-12-09T23:55:33.543Z",
+      "updatedAt": "2025-12-09T23:55:33.543Z",
+      "courts": [
+        {
+          "id": 16,
+          "name": "Cancha Techada 1",
+          "sport": "Futbol",
+          "type": "Sintética Techada",
+          "pricePerHour": 110,
+          "venueId": 8,
+          "createdAt": "2025-12-09T23:55:33.543Z",
+          "updatedAt": "2025-12-09T23:55:33.543Z"
+        },
+        {
+          "id": 17,
+          "name": "Cancha Techada Voley",
+          "sport": "Voley",
+          "type": "Piso Flotante",
+          "pricePerHour": 60,
+          "venueId": 8,
+          "createdAt": "2025-12-09T23:55:33.543Z",
+          "updatedAt": "2025-12-09T23:55:33.543Z"
+        }
+      ]
+    }
+  ],
+  "timestamp": "2025-12-10T01:20:17.749Z"
+}
