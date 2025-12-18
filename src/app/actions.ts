@@ -15,6 +15,62 @@ import { join } from 'path';
 
 const prisma = new PrismaClient();
 
+export async function submitPayment(prevState: any, formData: FormData) {
+    const session = await auth();
+    if (!session?.user?.email) return { success: false, message: 'No sesión' };
+
+    const operationCode = formData.get('operationCode') as string;
+    const voucherFile = formData.get('voucherImage') as File | null;
+
+    if (!operationCode) {
+        return { success: false, message: 'Código de operación requerido' };
+    }
+
+    // Save Image if exists
+    let imageUrl = '';
+    if (voucherFile && voucherFile.size > 0) {
+        const path = await saveFile(voucherFile);
+        if (path) imageUrl = path;
+    }
+
+    try {
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (!user) return { success: false, message: 'Usuario no encontrado' };
+
+        // DEMO TRICK: Auto-approve if code is "DEMO123"
+        const isDemo = operationCode === 'DEMO123';
+        const status = isDemo ? 'APPROVED' : 'PENDING';
+
+        await prisma.paymentAttempt.create({
+            data: {
+                userId: user.id,
+                operationCode,
+                imageUrl,
+                status
+            }
+        });
+
+        if (isDemo) {
+            // Instant Upgrade
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    plan: 'PRO',
+                    subscriptionStatus: 'ACTIVE'
+                }
+            });
+            revalidatePath('/admin');
+            return { success: true, message: '¡Pago Aprobado Automáticamente! Tu plan ha sido actualizado a PRO.' };
+        }
+
+        return { success: true, message: 'Pago registrado. Estamos validando tu comprobante.' };
+
+    } catch (error) {
+        console.error(error);
+        return { success: false, message: 'Error al registrar el pago' };
+    }
+}
+
 async function saveFile(file: File): Promise<string | null> {
     if (!file || file.size === 0) return null;
 
@@ -289,6 +345,19 @@ export async function createVenue(prevState: any, formData: FormData) {
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
     if (!user) return { success: false, message: 'Usuario no encontrado' };
+
+    // --- Subscription Restriction Logic ---
+    const venuesCount = await prisma.venue.count({
+        where: { ownerId: user.id }
+    });
+
+    if (user.plan === 'FREE' && venuesCount >= 1) {
+        return {
+            success: false,
+            message: 'Límite alcanzado. Actualiza a PRO para crear más sedes.'
+        };
+    }
+    // --------------------------------------
 
     const validatedFields = VenueSchema.safeParse({
         name: formData.get('name'),
@@ -803,6 +872,47 @@ export async function getVenueStats(venueId: number) {
         recentBookings,
         histogramData,
         detailedCourts
+    };
+}
+
+export async function getDashboardStats() {
+    const session = await auth();
+    if (!session?.user?.email) return { error: 'No autorizado' };
+
+    const user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true, plan: true }
+    });
+
+    if (!user) return { error: 'Usuario no encontrado' };
+
+    // Secure Query: Filter by ownerId
+    const stats = await prisma.booking.aggregate({
+        _sum: {
+            totalPrice: true
+        },
+        _count: {
+            id: true
+        },
+        where: {
+            court: {
+                venue: {
+                    ownerId: user.id // SECURITY: Data Isolation
+                }
+            },
+            status: { in: ['CONFIRMED', 'COMPLETED'] }
+        }
+    });
+
+    const activeVenuesCount = await prisma.venue.count({
+        where: { ownerId: user.id }
+    });
+
+    return {
+        totalRevenue: stats._sum.totalPrice || 0,
+        totalBookings: stats._count.id || 0,
+        activeVenues: activeVenuesCount,
+        plan: user.plan
     };
 }
 

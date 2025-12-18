@@ -2,13 +2,15 @@ import { auth } from '@/auth';
 import { PrismaClient } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getAllOwnerBookings } from '@/app/actions';
+import { getAllOwnerBookings, expireBookings, getDashboardStats } from '@/app/actions';
 import CourtFilter from '@/components/CourtFilter';
 import BookingStatusManager from '@/components/BookingStatusManager';
+import SubscriptionStatus from '@/components/SubscriptionStatus';
 
 const prisma = new PrismaClient();
 
 async function getOwnerData(email: string) {
+    await expireBookings();
     const user = await prisma.user.findUnique({
         where: { email },
         include: {
@@ -96,6 +98,11 @@ export default async function AdminPage({
                         + Nuevo Local
                     </Link>
                 </div>
+            </div>
+
+            {/* Subscription Manager */}
+            <div className="mb-8">
+                <SubscriptionStatus plan={user.plan} />
             </div>
 
             {/* My Venues List */}

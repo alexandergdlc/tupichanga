@@ -1,263 +1,171 @@
-import { PrismaClient } from '@prisma/client'
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
 
 async function main() {
-    console.log('Start seeding ...')
+    console.log('🌱 Starting robust seeding...');
 
-    // Clean existing data
-    await prisma.booking.deleteMany()
-    await prisma.schedule.deleteMany()
-    await prisma.court.deleteMany()
-    await prisma.venue.deleteMany()
-    await prisma.user.deleteMany()
+    // 1. Clean Database (Optional but recommended for clean slate)
+    // Be careful if you want to keep data, but for a presentation seed, cleaning is usually best.
+    await prisma.booking.deleteMany();
+    await prisma.schedule.deleteMany();
+    await prisma.court.deleteMany();
+    await prisma.venue.deleteMany();
+    await prisma.paymentAttempt.deleteMany();
+    await prisma.user.deleteMany();
 
-    const fs = require('fs');
-    const path = require('path');
-    const backupPath = path.join(__dirname, 'backup.json');
+    console.log('🧹 Database cleaned.');
 
-    if (fs.existsSync(backupPath)) {
-        console.log('📦 Backup detectado! Restaurando desde prisma/backup.json...');
-        const backupData = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
+    // 2. Create Users
+    const password = await bcrypt.hash('123456', 10);
 
-        // Restore Users
-        for (const user of backupData.users) {
-            await prisma.user.create({ data: user });
-        }
-        console.log(`✅ Restaurados ${backupData.users.length} usuarios.`);
-
-        // Restore Venues & Courts
-        // Note: Courts are nested creation in backup usually? 
-        // Our backup script splits them or includes them? Backup script used "include: { courts: true }".
-        // So we can just create venue with courts.
-        for (const venue of backupData.venues) {
-            // Need to handle IDs properly? 
-            // Prisma create can accept ID if we configure it, but usually auto-increment.
-            // If we want to keep relationships, we must rely on manual ID insertion or re-mapping.
-            // For simple seed restore, we can try to force ID if provider allows, or just create new.
-            // To keep simple: let's strip IDs and recreate. But that breaks Owner link if IDs change.
-            // SOLUTION: We must connect by Email for owner.
-
-            // Note: Simplest persistent backup for dev is to NOT strip IDs and assume DB is clean.
-            // SQL Server supports Identity Insert if enabled, but Prisma handles 'data.id' often.
-            // Let's try to restore with IDs. If it fails, we fallback to new IDs.
-            // But preserving IDs is critical for consistency.
-
-            // Strip ID from venue to be safe and re-connect owner by email? No, we need ownerID.
-            // If we restored users WITH IDs, then ownerID is valid.
-
-            // So strategy: Restore exact data objects.
-            await prisma.venue.create({
-                data: {
-                    ...venue,
-                    courts: {
-                        create: venue.courts.map((c: any) => {
-                            const { id, venueId, ...rest } = c; // Strip court ID to let auto-inc work, or keep it?
-                            // Let's strip ID for safety in child records unless vital.
-                            return rest;
-                        })
-                    }
-                }
-            });
-        }
-        console.log(`✅ Restaurados ${backupData.venues.length} locales.`);
-
-        console.log('⚠️ Restauración desde backup completada. Se omiten datos de prueba por defecto.');
-        return;
-    }
-
-    console.log('⚠️ No hay backup encontrado (prisma/backup.json). Generando datos de prueba por defecto...');
-
-    const bcrypt = require('bcryptjs')
-    const hashedPassword = await bcrypt.hash('123456', 10)
-
-    // 1. Create Users
-    // Jhor Marinio (Owner)
-    const jhor = await prisma.user.create({
+    // Pro Owner
+    const owner = await prisma.user.create({
         data: {
-            email: 'jhor.marinio@tupichanga.pe',
-            name: 'Jhor Marinio',
-            password: hashedPassword,
+            email: 'demo@tupichanga.com',
+            name: 'Admin TuPichanga',
+            password,
             role: 'OWNER',
-            image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80'
-        } as any,
-    })
+            plan: 'PRO',
+            subscriptionStatus: 'ACTIVE',
+            image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80',
+        },
+    });
 
-    // Diego Flores (Owner)
-    const diego = await prisma.user.create({
-        data: {
-            email: 'diego.flores@tupichanga.pe',
-            name: 'Diego Flores',
-            password: hashedPassword,
-            role: 'OWNER',
-            image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80'
-        } as any,
-    })
-
-    // Client (Test User)
+    // Generic Client (to make bookings)
     const client = await prisma.user.create({
         data: {
-            email: 'cliente@gmail.com',
-            name: 'Carlos Cliente',
-            password: hashedPassword,
+            email: 'cliente@demo.com',
+            name: 'Cliente Frecuente',
+            password,
             role: 'CLIENT',
-            image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80'
-        } as any,
-    })
+        },
+    });
 
-    console.log(`Created users: ${jhor.name}, ${diego.name}, ${client.name}`)
+    console.log(`👤 Created Owner: ${owner.email} & Client: ${client.email}`);
 
-    // 2. Create Venues for Jhor Marinio (3 Venues, Ayacucho)
-    const jhorVenuesData = [
+    // 3. Create Venues
+    const venuesData = [
         {
-            name: 'Complejo Deportivo Maracaná Ayacucho',
-            description: 'El mejor grass sintético de Huamanga. Abierto las 24 horas.',
-            address: 'Av. Mariscal Cáceres 450',
-            city: 'Ayacucho',
-            imageUrl: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?q=80&w=2070',
-            courts: [
-                { name: 'Cancha 1 - Fútbol 7', sport: 'Futbol', pricePerHour: 80.00, type: 'Sintética' },
-                { name: 'Loza 1 - Voley/Futsal', sport: 'Voley', pricePerHour: 40.00, type: 'Losa' }
-            ]
+            name: 'Complejo Deportivo "El Golazo"',
+            city: 'Lima',
+            district: 'Miraflores',
+            address: 'Av. El Ejército 123',
+            description: 'El mejor grass sintético de Miraflores. Estacionamiento privado.',
+            imageUrl: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&q=80',
         },
         {
-            name: 'El Coloso de Huamanga',
-            description: 'Amplias instalaciones con estacionamiento y zona de parrillas.',
-            address: 'Jr. 28 de Julio 123',
-            city: 'Ayacucho',
-            imageUrl: 'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?q=80&w=2071',
-            courts: [
-                { name: 'Estadio Principal', sport: 'Futbol', pricePerHour: 120.00, type: 'Grass Natural' },
-                { name: 'Cancha Voley A', sport: 'Voley', pricePerHour: 50.00, type: 'Sintética' }
-            ]
+            name: 'Soccer Plaza San Isidro',
+            city: 'Lima',
+            district: 'San Isidro',
+            address: 'Ca. Los Laureles 456',
+            description: 'Canchas techadas y camerinos de lujo.',
+            imageUrl: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&q=80',
         },
         {
-            name: 'Club Campestre Yanamilla',
-            description: 'Disfruta del deporte al aire libre con la mejor vista de Ayacucho.',
-            address: 'Vía de Evitamiento Km 5',
-            city: 'Ayacucho',
-            imageUrl: 'https://images.unsplash.com/photo-1555412619-354c7280d877?q=80&w=1974',
-            courts: [
-                { name: 'Cancha Pro 1', sport: 'Futbol', pricePerHour: 100.00, type: 'FIFA Quality' },
-                { name: 'Campo Multiusos', sport: 'Voley', pricePerHour: 45.00, type: 'Concreto' }
-            ]
-        }
+            name: 'Centro Deportivo Norte',
+            city: 'Lima',
+            district: 'Los Olivos',
+            address: 'Av. Antúnez de Mayolo 789',
+            description: 'Abierto las 24 horas. Seguridad garantizada.',
+            imageUrl: 'https://images.unsplash.com/photo-1552667466-07770ae110d0?auto=format&fit=crop&q=80',
+        },
     ];
 
-    for (const venue of jhorVenuesData) {
-        await prisma.venue.create({
+    const venues = [];
+    for (const v of venuesData) {
+        const venue = await prisma.venue.create({
             data: {
-                name: venue.name,
-                description: venue.description,
-                address: venue.address,
-                city: venue.city,
-                imageUrl: venue.imageUrl,
-                ownerId: jhor.id,
-                courts: { create: venue.courts }
-            } as any
-        })
+                ...v,
+                ownerId: owner.id,
+            },
+        });
+        venues.push(venue);
+
+        // Create Courts for this Venue
+        await prisma.court.createMany({
+            data: [
+                { name: 'Cancha 1 (F5)', sport: 'Fútbol', type: 'Sintética', pricePerHour: 80, venueId: venue.id },
+                { name: 'Cancha 2 (F7)', sport: 'Fútbol', type: 'Sintética', pricePerHour: 120, venueId: venue.id },
+            ],
+        });
     }
 
-    // 3. Create Venues for Diego Flores (2 Venues, Ayacucho)
-    const diegoVenuesData = [
-        {
-            name: 'Estadio Leoncio Prado',
-            description: 'La tradición del deporte en Ayacucho. Canchas renovadas.',
-            address: 'Parque Leoncio Prado S/N',
-            city: 'Ayacucho',
-            imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=2070',
-            courts: [
-                { name: 'Campo A - Futbol', sport: 'Futbol', pricePerHour: 90.00, type: 'Sintética' },
-                { name: 'Net Alta - Voley', sport: 'Voley', pricePerHour: 40.00, type: 'Losa' }
-            ]
-        },
-        {
-            name: 'Polideportivo Nery García',
-            description: 'Complejo moderno cerca al mercado Nery García.',
-            address: 'Jr. Los Andes 567',
-            city: 'Ayacucho',
-            imageUrl: 'https://images.unsplash.com/photo-1518605348400-43ded9d2948b?q=80&w=2070',
-            courts: [
-                { name: 'Cancha Techada 1', sport: 'Futbol', pricePerHour: 110.00, type: 'Sintética Techada' },
-                { name: 'Cancha Techada Voley', sport: 'Voley', pricePerHour: 60.00, type: 'Piso Flotante' }
-            ]
-        }
-    ];
+    // Refetch courts to get IDs
+    const allCourts = await prisma.court.findMany();
+    console.log(`🏟️ Created ${venues.length} Venues and ${allCourts.length} Courts.`);
 
-    for (const venue of diegoVenuesData) {
-        await prisma.venue.create({
-            data: {
-                name: venue.name,
-                description: venue.description,
-                address: venue.address,
-                city: venue.city,
-                imageUrl: venue.imageUrl,
-                ownerId: diego.id,
-                courts: { create: venue.courts }
-            } as any
-        })
-    }
+    // 4. Generate Bookings
+    const bookingsData = [];
 
-    console.log(`Created venues for Owners`)
+    // Helper: Random int between min and max
+    const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-    // 4. Create Bookings (Historial)
-    const bookings = []
+    // A. Past Bookings (Last 30 days) - Status: COMPLETED
+    // We want bars in the chart, so let's cluster them a bit or make them random.
+    for (let i = 0; i < 50; i++) {
+        const daysAgo = randomInt(1, 30);
+        const bookingDate = new Date();
+        bookingDate.setDate(bookingDate.getDate() - daysAgo);
 
-    // Fetch all courts to be sure
-    const allCourts = await prisma.court.findMany()
+        // Random hour between 6pm and 11pm (18 - 23)
+        const hour = randomInt(18, 23);
+        bookingDate.setHours(hour, 0, 0, 0);
 
-    const now = new Date()
+        const end = new Date(bookingDate);
+        end.setHours(hour + 1);
 
-    for (let i = 0; i < 50; i++) { // 50 Random bookings
-        const randomCourt = allCourts[Math.floor(Math.random() * allCourts.length)]
-        if (!randomCourt) continue;
+        const randomCourt = allCourts[Math.floor(Math.random() * allCourts.length)];
 
-        const daysAgo = Math.floor(Math.random() * 60) // Last 2 months
-        const bookingDate = new Date(now)
-        bookingDate.setDate(bookingDate.getDate() - daysAgo)
-        bookingDate.setHours(Math.floor(Math.random() * 14) + 8, 0, 0, 0) // 8am to 10pm
-
-        bookings.push({
-            courtId: randomCourt.id,
+        bookingsData.push({
             userId: client.id,
+            courtId: randomCourt.id,
             startTime: bookingDate,
-            endTime: new Date(bookingDate.getTime() + 60 * 60 * 1000),
+            endTime: end,
             totalPrice: randomCourt.pricePerHour,
-            status: 'CONFIRMED'
-        })
+            status: 'COMPLETED',
+        });
     }
 
-    // Add future bookings
+    // B. Future Bookings (Next 7 days) - Status: CONFIRMED
     for (let i = 0; i < 5; i++) {
-        const randomCourt = allCourts[Math.floor(Math.random() * allCourts.length)]
-        if (!randomCourt) continue;
+        const daysAhead = randomInt(1, 7);
+        const bookingDate = new Date();
+        bookingDate.setDate(bookingDate.getDate() + daysAhead);
 
-        const daysFuture = Math.floor(Math.random() * 7) + 1
-        const bookingDate = new Date(now)
-        bookingDate.setDate(bookingDate.getDate() + daysFuture)
-        bookingDate.setHours(18 + i, 0, 0, 0)
+        // Random hour
+        const hour = randomInt(16, 22);
+        bookingDate.setHours(hour, 0, 0, 0);
 
-        bookings.push({
-            courtId: randomCourt.id,
+        const end = new Date(bookingDate);
+        end.setHours(hour + 1);
+
+        const randomCourt = allCourts[Math.floor(Math.random() * allCourts.length)];
+
+        bookingsData.push({
             userId: client.id,
+            courtId: randomCourt.id,
             startTime: bookingDate,
-            endTime: new Date(bookingDate.getTime() + 60 * 60 * 1000),
+            endTime: end,
             totalPrice: randomCourt.pricePerHour,
-            status: 'CONFIRMED'
-        })
+            status: 'CONFIRMED',
+        });
     }
 
-    await prisma.booking.createMany({ data: bookings })
+    await prisma.booking.createMany({
+        data: bookingsData,
+    });
 
-    console.log(`Created ${bookings.length} sample bookings`)
+    console.log(`📅 Generated ${bookingsData.length} Bookings (50 Past, 5 Future).`);
+    console.log('✅ Seed executed successfully!');
 }
 
 main()
-    .then(async () => {
-        await prisma.$disconnect()
+    .catch((e) => {
+        console.error(e);
+        process.exit(1);
     })
-    .catch(async (e) => {
-        console.error(e)
-        await prisma.$disconnect()
-        process.exit(1)
-    })
+    .finally(async () => {
+        await prisma.$disconnect();
+    });

@@ -65,11 +65,7 @@ export default function LoginForm() {
                     )}
                 </div>
 
-                <p className="mt-4 text-xs text-zinc-500">
-                    Usuario de prueba: <br />
-                    Email: <b>admin@tupichanga.pe</b> <br />
-                    Pass: <b>hashed_password_123</b>
-                </p>
+
             </div>
         </form>
     );

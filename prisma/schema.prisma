@@ -8,17 +8,30 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  image     String?  // Profile picture URL
-  password  String
-  phoneNumber String?
-  role      String   @default("CLIENT")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  bookings  Booking[]
-  venues    Venue[]
+  id               Int                @id @default(autoincrement())
+  email            String             @unique
+  name             String?
+  image            String? // Profile picture URL
+  password         String
+  phoneNumber      String?
+  role             String             @default("CLIENT")
+  plan             String             @default("FREE") // Enum: FREE, PRO
+  subscriptionStatus String           @default("ACTIVE") // Enum: ACTIVE, INACTIVE
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  bookings         Booking[]
+  venues           Venue[]
+  payments         PaymentAttempt[]
+}
+
+model PaymentAttempt {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  operationCode String
+  status        String   @default("PENDING") // Enum: PENDING, APPROVED, REJECTED
+  imageUrl      String?  // Voucher image
+  createdAt     DateTime @default(now())
 }
 
 model Venue {
